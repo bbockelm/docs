@@ -1506,3 +1506,1740 @@ If you wish to only update the RPMs that changed, the set of RPMs is:
 ``` file
 ```
 
+OSG Software Release 3.3.1
+==========================
+
+**Release Date**: 2015-09-08
+
+Summary of changes
+------------------
+
+This release contains:
+
+-   Enterprise Linux 7: Worker node support only
+-   GUMS 1.5.0
+    -   A security-related bug was found in the GUMS administrative interface. The risk of this vulnerability has been assessed by OSG Security Team as “Critical”. A new GUMS version 1.5.0 has been released and it is included in OSG Software version 3.2.27/3.3.1. Site administrators should update ASAP.
+-   [HTCondor 8.3.8](https://www-auth.cs.wisc.edu/lists/htcondor-users/2015-August/msg00153.shtml)
+-   HTCondor CE 1.15
+    -   Add 'default\_remote\_cerequirements' attribute to the JOB\_ROUTER\_DEFAULTS
+    -   Verify the first route in JOB\_ROUTER\_ENTRIES in the init script
+    -   htcondor-ce-collecotr now uses /etc/sysconfig/condor-ce-collector for additional configuration
+-   gridFTP-HDFS checksum verification improvements
+    -   Checksum algorithm names are checked with a case insensitive comparison
+    -   Error codes are properly returned to the user
+-   CA certificates based on [IGTF 1.67](https://dist.eugridpma.info/distribution/igtf/current/CHANGES)
+-   StashCache improvements
+    -   Added logging to the StashCache daemon
+    -   Advertise the StashCache daemon version to the master ClassAd
+    -   Improved example configuration files to include "pss.trace all"
+
+These [JIRA tickets](https://jira.opensciencegrid.org/issues/?jql=project%20%3D%20SOFTWARE%20AND%20fixVersion%20%3D%203.3.1%20ORDER%20BY%20priority%20DESC) were addressed in this release.
+
+Detailed changes are below. All of the documentation can be found in the [Release3](https://twiki.grid.iu.edu/bin/view/Documentation/Release3/) area of the TWiki.
+
+Known Issues
+------------
+
+-   The HTCondor shared port daemon can run out of file descriptors.
+    -   This is a problem with HTCondor 8.3.7 and 8.3.8.
+    -   The problem will be fixed in the HTCondor 8.4.0 release.
+    -   The glideInWMS factories (and possibly front-ends) using the following configuration model will cause the HTCondor shared port daemon to leak file descriptors. The relevant configuration fragment is similar to:
+
+            :::file
+            USE_SHARED_PORT = FALSE
+            DAEMON_LIST = $(DAEMON_LIST) SHARED_PORT
+            SCHEDD.USE_SHARED_PORT = TRUE
+            SHADOW.USE_SHADED_PORT = TRUE
+
+-   This non-standard shared-port configuration is probably used to avoid dealing with shared-port collector trees.
+-   The work-around is to start the HTCondor master with CONDOR\_PRIVATE\_SHARED\_PORT\_COOKIE set in the environment, as it will propagate down to the target daemons. CONDOR\_PRIVATE\_SHARED\_PORT\_COOKIE should contain a 32-byte random number in hexadecimal format (64 characters). **Note:** care must be taken to ensure that this value is private. Upgrade to HTCondor 8.4.0 as soon as possible and stop using this workaround. \* Running osg-configure with the new version of HTCondor installed causes a deprecation warning to be emitted. The warning does not affect the services. \* StashCache packages need to be manually configured
+-   Manual configuration for origin server
+    -   Assuming that the origin server connects only to a redirector (not directly to cache server), minimal xrootd configuration is required. The configuration file, /etc/xrootd/xrootd-stashcache-origin-server.cfg, in this release is overkill. Here are recommended settings to use:
+
+            :::file
+            xrd.port 1094
+            all.role server
+            all.manager stash-redirector.example.com 1213
+            all.export / nostage
+            xrootd.trace emsg login stall redirect
+            ofs.trace none
+            xrd.trace conn
+            cms.trace all
+            sec.protocol  host
+            sec.protbind  * none
+            all.adminpath /var/run/xrootd
+            all.pidpath /var/run/xrootd
+
+-   Manual configuration for cache server
+    -   In contrast to the origin server configuration, one needs to declare `pss.origin <stash-redirector.example.com>` instead of configuring the cmsd or manager (only the xrootd daemon is required on the cache server). More detailed configuration of cache server for StashCache is [here](https://confluence.grid.iu.edu/pages/viewpage.action?title=Installing+an+XRootD+server+for+Stash+Cache&spaceKey=STAS).
+-   In both cases, administrator needs to set the path of custom configuration file for its xrootd/cmds instance in /etc/sysconfig/xrootd, For example, change the cmds default from:
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-clustered.cfg -k fifo"
+<br/>
+
+    to
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-stashcache-origin-server.marian -k fifo" 
+
+Updating to the new release
+---------------------------
+
+### Update Repositories
+
+To update to this series, you need [install the current OSG repositories](../../common/yum#install-osg-repositories).
+
+### Update Software
+
+Once the new repositories are installed, you can update to this new release with:
+
+``` console
+[root@client ~] $ yum update
+```
+
+<span class="twiki-macro NOTE"></span> Please be aware that running `yum update` may also update other RPMs. You can exclude packages from being updated using the `--exclude=[package-name or glob]` option for the `yum` command.
+
+<span class="twiki-macro NOTE"></span> Watch the yum update carefully for any messages about a `.rpmnew` file being created. That means that a configuration file had been editted, and a new default version was to be installed. In that case, RPM does not overwrite the editted configuration file but instead installs the new version with a `.rpmnew` extension. You will need to merge any edits that have made into the `.rpmnew` file and then move the merged version into place (that is, without the `.rpmnew` extension). Watch especially for `/etc/lcmaps.db`, which every site is expected to edit.
+
+Need help?
+----------
+
+Do you need help with this release? [Contact us for help](../../common/help).
+
+Detailed changes in this release
+--------------------------------
+
+### Packages
+
+We added or updated the following packages to the production OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+-   [blahp-1.18.13.bosco-4.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=blahp-1.18.13.bosco-4.osg33.el6)
+-   [condor-8.3.8-1.1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=condor-8.3.8-1.1.osg33.el6)
+-   [emi-trustmanager-tomcat-3.0.0-12.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=emi-trustmanager-tomcat-3.0.0-12.osg33.el6)
+-   [gridftp-hdfs-0.5.4-20.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=gridftp-hdfs-0.5.4-20.osg33.el6)
+-   [gums-1.5.0-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=gums-1.5.0-1.osg33.el6)
+-   [hadoop-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=hadoop-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6)
+-   [htcondor-ce-1.15-2.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=htcondor-ce-1.15-2.osg33.el6)
+-   [igtf-ca-certs-1.67-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=igtf-ca-certs-1.67-1.osg33.el6)
+-   [osg-build-1.6.1-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-build-1.6.1-1.osg33.el6)
+-   [osg-ca-certs-1.48-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-ca-certs-1.48-1.osg33.el6)
+-   [osg-test-1.4.29-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-test-1.4.29-1.osg33.el6)
+-   [osg-tested-internal-3.3-3.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-tested-internal-3.3-3.osg33.el6)
+-   [osg-version-3.3.1-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.1-1.osg33.el6)
+-   [rsv-3.10.3-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=rsv-3.10.3-1.osg33.el6)
+-   [stashcache-0.4-2.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=stashcache-0.4-2.osg33.el6)
+
+#### Enterprise Linux 7
+
+-   [blahp-1.18.13.bosco-4.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=blahp-1.18.13.bosco-4.osg33.el7)
+-   [condor-8.3.8-1.1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=condor-8.3.8-1.1.osg33.el7)
+-   [emi-trustmanager-tomcat-3.0.0-12.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=emi-trustmanager-tomcat-3.0.0-12.osg33.el7)
+-   [htcondor-ce-1.15-2.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=htcondor-ce-1.15-2.osg33.el7)
+-   [igtf-ca-certs-1.67-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=igtf-ca-certs-1.67-1.osg33.el7)
+-   [osg-build-1.6.1-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-build-1.6.1-1.osg33.el7)
+-   [osg-ca-certs-1.48-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-ca-certs-1.48-1.osg33.el7)
+-   [osg-test-1.4.29-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-test-1.4.29-1.osg33.el7)
+-   [osg-tested-internal-3.3-3.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-tested-internal-3.3-3.osg33.el7)
+-   [osg-version-3.3.1-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.1-1.osg33.el7)
+-   [rsv-3.10.3-1\_clipped.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=rsv-3.10.3-1_clipped.osg33.el7)
+-   [stashcache-0.4-2.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=stashcache-0.4-2.osg33.el7)
+
+### RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+    blahp blahp-debuginfo condor condor-all condor-bosco condor-classads condor-classads-devel condor-cream-gahp condor-debuginfo condor-kbdd condor-procd condor-python condor-std-universe condor-test condor-vm-gahp emi-trustmanager-tomcat gridftp-hdfs gridftp-hdfs-debuginfo gums gums-client gums-service hadoop hadoop-client hadoop-conf-pseudo hadoop-debuginfo hadoop-doc hadoop-hdfs hadoop-hdfs-datanode hadoop-hdfs-fuse hadoop-hdfs-fuse-selinux hadoop-hdfs-journalnode hadoop-hdfs-namenode hadoop-hdfs-secondarynamenode hadoop-hdfs-zkfc hadoop-httpfs hadoop-libhdfs hadoop-mapreduce hadoop-yarn htcondor-ce htcondor-ce-client htcondor-ce-collector htcondor-ce-condor htcondor-ce-debuginfo htcondor-ce-lsf htcondor-ce-pbs htcondor-ce-sge igtf-ca-certs osg-build osg-ca-certs osg-test osg-tested-internal osg-version python-six rsv rsv-consumers rsv-core rsv-metrics stashcache-cache-server stashcache-daemon stashcache-origin-server
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+blahp-1.18.13.bosco-4.osg33.el6
+blahp-debuginfo-1.18.13.bosco-4.osg33.el6
+condor-8.3.8-1.1.osg33.el6
+condor-all-8.3.8-1.1.osg33.el6
+condor-bosco-8.3.8-1.1.osg33.el6
+condor-classads-8.3.8-1.1.osg33.el6
+condor-classads-devel-8.3.8-1.1.osg33.el6
+condor-cream-gahp-8.3.8-1.1.osg33.el6
+condor-debuginfo-8.3.8-1.1.osg33.el6
+condor-kbdd-8.3.8-1.1.osg33.el6
+condor-procd-8.3.8-1.1.osg33.el6
+condor-python-8.3.8-1.1.osg33.el6
+condor-std-universe-8.3.8-1.1.osg33.el6
+condor-test-8.3.8-1.1.osg33.el6
+condor-vm-gahp-8.3.8-1.1.osg33.el6
+emi-trustmanager-tomcat-3.0.0-12.osg33.el6
+gridftp-hdfs-0.5.4-20.osg33.el6
+gridftp-hdfs-debuginfo-0.5.4-20.osg33.el6
+gums-1.5.0-1.osg33.el6
+gums-client-1.5.0-1.osg33.el6
+gums-service-1.5.0-1.osg33.el6
+hadoop-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-client-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-conf-pseudo-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-debuginfo-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-doc-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-hdfs-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-hdfs-datanode-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-hdfs-fuse-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-hdfs-fuse-selinux-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-hdfs-journalnode-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-hdfs-namenode-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-hdfs-secondarynamenode-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-hdfs-zkfc-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-httpfs-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-libhdfs-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-mapreduce-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+hadoop-yarn-2.0.0+545-1.cdh4.1.1.p0.21.osg33.el6
+htcondor-ce-1.15-2.osg33.el6
+htcondor-ce-client-1.15-2.osg33.el6
+htcondor-ce-collector-1.15-2.osg33.el6
+htcondor-ce-condor-1.15-2.osg33.el6
+htcondor-ce-debuginfo-1.15-2.osg33.el6
+htcondor-ce-lsf-1.15-2.osg33.el6
+htcondor-ce-pbs-1.15-2.osg33.el6
+htcondor-ce-sge-1.15-2.osg33.el6
+igtf-ca-certs-1.67-1.osg33.el6
+osg-build-1.6.1-1.osg33.el6
+osg-ca-certs-1.48-1.osg33.el6
+osg-test-1.4.29-1.osg33.el6
+osg-tested-internal-3.3-3.osg33.el6
+osg-version-3.3.1-1.osg33.el6
+rsv-3.10.3-1.osg33.el6
+rsv-consumers-3.10.3-1.osg33.el6
+rsv-core-3.10.3-1.osg33.el6
+rsv-metrics-3.10.3-1.osg33.el6
+stashcache-0.4-2.osg33.el6
+stashcache-cache-server-0.4-2.osg33.el6
+stashcache-daemon-0.4-2.osg33.el6
+stashcache-origin-server-0.4-2.osg33.el6
+```
+
+#### Enterprise Linux 7
+
+``` file
+blahp-1.18.13.bosco-4.osg33.el7
+blahp-debuginfo-1.18.13.bosco-4.osg33.el7
+condor-8.3.8-1.1.osg33.el7
+condor-all-8.3.8-1.1.osg33.el7
+condor-bosco-8.3.8-1.1.osg33.el7
+condor-classads-8.3.8-1.1.osg33.el7
+condor-classads-devel-8.3.8-1.1.osg33.el7
+condor-debuginfo-8.3.8-1.1.osg33.el7
+condor-kbdd-8.3.8-1.1.osg33.el7
+condor-procd-8.3.8-1.1.osg33.el7
+condor-python-8.3.8-1.1.osg33.el7
+condor-test-8.3.8-1.1.osg33.el7
+condor-vm-gahp-8.3.8-1.1.osg33.el7
+emi-trustmanager-tomcat-3.0.0-12.osg33.el7
+htcondor-ce-1.15-2.osg33.el7
+htcondor-ce-client-1.15-2.osg33.el7
+htcondor-ce-collector-1.15-2.osg33.el7
+htcondor-ce-condor-1.15-2.osg33.el7
+htcondor-ce-debuginfo-1.15-2.osg33.el7
+htcondor-ce-lsf-1.15-2.osg33.el7
+htcondor-ce-pbs-1.15-2.osg33.el7
+htcondor-ce-sge-1.15-2.osg33.el7
+igtf-ca-certs-1.67-1.osg33.el7
+osg-build-1.6.1-1.osg33.el7
+osg-ca-certs-1.48-1.osg33.el7
+osg-test-1.4.29-1.osg33.el7
+osg-tested-internal-3.3-3.osg33.el7
+osg-version-3.3.1-1.osg33.el7
+rsv-3.10.3-1_clipped.osg33.el7
+rsv-consumers-3.10.3-1_clipped.osg33.el7
+rsv-core-3.10.3-1_clipped.osg33.el7
+rsv-metrics-3.10.3-1_clipped.osg33.el7
+stashcache-0.4-2.osg33.el7
+stashcache-cache-server-0.4-2.osg33.el7
+stashcache-daemon-0.4-2.osg33.el7
+stashcache-origin-server-0.4-2.osg33.el7
+```
+
+### Upcoming Packages
+
+We added or updated the following packages to the **upcoming** OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 5
+
+#### Enterprise Linux 6
+
+### Upcoming RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 5
+
+``` file
+```
+
+#### Enterprise Linux 6
+
+``` file
+```
+
+OSG Software Release 3.3.2
+==========================
+
+**Release Date**: 2015-10-13
+
+Summary of changes
+------------------
+
+This release contains:
+
+-   [GlideinWMS 3.2.11.2](http://www.uscms.org/SoftwareComputing/Grid/WMS/glideinWMS/doc.prd/history.html)
+-   [XRootD 4.2.3](https://github.com/xrootd/xrootd/blob/v4.2.3/docs/ReleaseNotes.txt)
+-   [HTCondor 8.4.0](https://www-auth.cs.wisc.edu/lists/htcondor-users/2015-September/msg00029.shtml)
+-   StashCache 0.6
+    -   daemon refuses to start if host certificate is not present
+    -   use FQDN in stashcache-daemon
+-   GUMS 1.5.1
+    -   Return groupName for pool account mappers
+    -   Bug fixes
+-   HTCondor-CE 1.16
+    -   Updates for PBS variants
+    -   Add CERN host DN format to HTCondor-CE configuration defaults
+-   GIP support multiple SLURM queues
+-   osg-configure 1.2.2
+    -   Support IPv6 IP addresses in configuration files
+    -   Add sensible default values for Allowed VOs
+-   RSV - srmcp-srm-probe (delays to account for NFS caching behavior)
+-   Add lcmaps-plugins-mount-under-scratch package
+-   Update to edg-mkgridmap 4.0.3, so it works on EL 7
+-   CA certificates based on [IGTF 1.68](https://dist.eugridpma.info/distribution/igtf/current/CHANGES)
+
+These [JIRA tickets](https://jira.opensciencegrid.org/issues/?jql=project%20%3D%20SOFTWARE%20AND%20fixVersion%20%3D%203.3.2%20ORDER%20BY%20priority%20DESC) were addressed in this release.
+
+Detailed changes are below. All of the documentation can be found in the [Release3](https://twiki.grid.iu.edu/bin/view/Documentation/Release3/) area of the TWiki.
+
+Known Issues
+------------
+
+-   HTCondor 8.4.0 has changed it's behavior in ways that cause the GlideinWMS frontend configuration to break. In order to correct this, the following setting needs to be added to the configuration file:
+
+        :::file
+        COLLECTOR_USES_SHARED_PORT = False
+
+-   StashCache packages need to be manually configured
+    -   Manual configuration for origin server
+        -   Assuming that the origin server connects only to a redirector (not directly to cache server), minimal xrootd configuration is required. The configuration file, /etc/xrootd/xrootd-stashcache-origin-server.cfg, in this release is overkill. Here are recommended settings to use:
+
+                :::file
+                xrd.port 1094
+                all.role server
+                all.manager stash-redirector.example.com 1213
+                all.export / nostage
+                xrootd.trace emsg login stall redirect
+                ofs.trace none
+                xrd.trace conn
+                cms.trace all
+                sec.protocol  host
+                sec.protbind  * none
+                all.adminpath /var/run/xrootd
+                all.pidpath /var/run/xrootd
+
+-   Manual configuration for cache server
+    -   In contrast to the origin server configuration, one needs to declare `pss.origin <stash-redirector.example.com>` instead of configuring the cmsd or manager (only the xrootd daemon is required on the cache server). More detailed configuration of cache server for StashCache is [here](https://confluence.grid.iu.edu/pages/viewpage.action?title=Installing+an+XRootD+server+for+Stash+Cache&spaceKey=STAS).
+-   In both cases, administrator needs to set the path of custom configuration file for its xrootd/cmds instance in /etc/sysconfig/xrootd, For example, change the cmds default from:
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-clustered.cfg -k fifo"
+<br/>
+
+    to
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-stashcache-origin-server.marian -k fifo" 
+
+Updating to the new release
+---------------------------
+
+### Update Repositories
+
+To update to this series, you need [install the current OSG repositories](../../common/yum#install-osg-repositories).
+
+### Update Software
+
+Once the new repositories are installed, you can update to this new release with:
+
+``` console
+[root@client ~] $ yum update
+```
+
+<span class="twiki-macro NOTE"></span> Please be aware that running `yum update` may also update other RPMs. You can exclude packages from being updated using the `--exclude=[package-name or glob]` option for the `yum` command.
+
+<span class="twiki-macro NOTE"></span> Watch the yum update carefully for any messages about a `.rpmnew` file being created. That means that a configuration file had been editted, and a new default version was to be installed. In that case, RPM does not overwrite the editted configuration file but instead installs the new version with a `.rpmnew` extension. You will need to merge any edits that have made into the `.rpmnew` file and then move the merged version into place (that is, without the `.rpmnew` extension). Watch especially for `/etc/lcmaps.db`, which every site is expected to edit.
+
+Need help?
+----------
+
+Do you need help with this release? [Contact us for help](../../common/help).
+
+Detailed changes in this release
+--------------------------------
+
+### Packages
+
+We added or updated the following packages to the production OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+-   [bestman2-2.3.0-26.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=bestman2-2.3.0-26.osg33.el6)
+-   [blahp-1.18.14.bosco-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=blahp-1.18.14.bosco-1.osg33.el6)
+-   [condor-8.4.0-1.2.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=condor-8.4.0-1.2.osg33.el6)
+-   [edg-mkgridmap-4.0.3-2.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=edg-mkgridmap-4.0.3-2.osg33.el6)
+-   [gip-1.3.11-7.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=gip-1.3.11-7.osg33.el6)
+-   [glideinwms-3.2.11.2-4.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=glideinwms-3.2.11.2-4.osg33.el6)
+-   [gridftp-hdfs-0.5.4-22.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=gridftp-hdfs-0.5.4-22.osg33.el6)
+-   [gums-1.5.1-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=gums-1.5.1-1.osg33.el6)
+-   [htcondor-ce-1.16-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=htcondor-ce-1.16-1.osg33.el6)
+-   [igtf-ca-certs-1.68-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=igtf-ca-certs-1.68-1.osg33.el6)
+-   [jglobus-2.1.0-5.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=jglobus-2.1.0-5.osg33.el6)
+-   [lcmaps-plugins-mount-under-scratch-0.0.4-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=lcmaps-plugins-mount-under-scratch-0.0.4-1.osg33.el6)
+-   [osg-ca-certs-1.49-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-ca-certs-1.49-1.osg33.el6)
+-   [osg-configure-1.2.2-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-configure-1.2.2-1.osg33.el6)
+-   [osg-test-1.4.30-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-test-1.4.30-1.osg33.el6)
+-   [osg-tested-internal-3.3-5.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-tested-internal-3.3-5.osg33.el6)
+-   [osg-version-3.3.2-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.2-1.osg33.el6)
+-   [privilege-xacml-2.6.5-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=privilege-xacml-2.6.5-1.osg33.el6)
+-   [rsv-3.10.4-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=rsv-3.10.4-1.osg33.el6)
+-   [stashcache-0.6-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=stashcache-0.6-1.osg33.el6)
+-   [xrootd-4.2.3-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=xrootd-4.2.3-1.osg33.el6)
+
+#### Enterprise Linux 7
+
+-   [axis-1.4-23.1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=axis-1.4-23.1.osg33.el7)
+-   [blahp-1.18.14.bosco-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=blahp-1.18.14.bosco-1.osg33.el7)
+-   [condor-8.4.0-1.2.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=condor-8.4.0-1.2.osg33.el7)
+-   [edg-mkgridmap-4.0.3-2.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=edg-mkgridmap-4.0.3-2.osg33.el7)
+-   [gip-1.3.11-7.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=gip-1.3.11-7.osg33.el7)
+-   [glideinwms-3.2.11.2-4.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=glideinwms-3.2.11.2-4.osg33.el7)
+-   [htcondor-ce-1.16-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=htcondor-ce-1.16-1.osg33.el7)
+-   [igtf-ca-certs-1.68-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=igtf-ca-certs-1.68-1.osg33.el7)
+-   [javamail-1.5.0-6.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=javamail-1.5.0-6.osg33.el7)
+-   [lcmaps-plugins-mount-under-scratch-0.0.4-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=lcmaps-plugins-mount-under-scratch-0.0.4-1.osg33.el7)
+-   [osg-ca-certs-1.49-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-ca-certs-1.49-1.osg33.el7)
+-   [osg-configure-1.2.2-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-configure-1.2.2-1.osg33.el7)
+-   [osg-test-1.4.30-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-test-1.4.30-1.osg33.el7)
+-   [osg-tested-internal-3.3-5.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-tested-internal-3.3-5.osg33.el7)
+-   [osg-version-3.3.2-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.2-1.osg33.el7)
+-   [rsv-3.10.4-1\_clipped.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=rsv-3.10.4-1_clipped.osg33.el7)
+-   [stashcache-0.6-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=stashcache-0.6-1.osg33.el7)
+-   [wsdl4j-1.6.3-3.1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=wsdl4j-1.6.3-3.1.osg33.el7)
+-   [xrootd-4.2.3-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=xrootd-4.2.3-1.osg33.el7)
+
+### RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+    bestman2-client bestman2-client-libs bestman2-common-libs bestman2-server bestman2-server-dep-libs bestman2-server-libs bestman2-tester bestman2-tester-libs blahp blahp-debuginfo condor condor-all condor-bosco condor-classads condor-classads-devel condor-cream-gahp condor-debuginfo condor-kbdd condor-procd condor-python condor-std-universe condor-test condor-vm-gahp edg-mkgridmap gip glideinwms-common-tools glideinwms-condor-common-config glideinwms-factory glideinwms-factory-condor glideinwms-glidecondor-tools glideinwms-libs glideinwms-minimal-condor glideinwms-usercollector glideinwms-userschedd glideinwms-vofrontend glideinwms-vofrontend-standalone gridftp-hdfs gridftp-hdfs-debuginfo gums gums-client gums-service htcondor-ce htcondor-ce-client htcondor-ce-collector htcondor-ce-condor htcondor-ce-debuginfo htcondor-ce-lsf htcondor-ce-pbs htcondor-ce-sge igtf-ca-certs jglobus lcmaps-plugins-mount-under-scratch lcmaps-plugins-mount-under-scratch-debuginfo osg-ca-certs osg-configure osg-configure-ce osg-configure-cemon osg-configure-condor osg-configure-gateway osg-configure-gip osg-configure-gratia osg-configure-infoservices osg-configure-lsf osg-configure-managedfork osg-configure-misc osg-configure-monalisa osg-configure-network osg-configure-pbs osg-configure-rsv osg-configure-sge osg-configure-slurm osg-configure-squid osg-configure-tests osg-test osg-tested-internal osg-version privilege-xacml python-argparse python-backports-ssl_match_hostname python-requests python-urllib3 rsv rsv-consumers rsv-core rsv-metrics stashcache-cache-server stashcache-daemon stashcache-origin-server xrootd xrootd-client xrootd-client-devel xrootd-client-libs xrootd-debuginfo xrootd-devel xrootd-doc xrootd-fuse xrootd-libs xrootd-private-devel xrootd-python xrootd-selinux xrootd-server xrootd-server-devel xrootd-server-libs
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+bestman2-2.3.0-26.osg33.el6
+bestman2-client-2.3.0-26.osg33.el6
+bestman2-client-libs-2.3.0-26.osg33.el6
+bestman2-common-libs-2.3.0-26.osg33.el6
+bestman2-server-2.3.0-26.osg33.el6
+bestman2-server-dep-libs-2.3.0-26.osg33.el6
+bestman2-server-libs-2.3.0-26.osg33.el6
+bestman2-tester-2.3.0-26.osg33.el6
+bestman2-tester-libs-2.3.0-26.osg33.el6
+blahp-1.18.14.bosco-1.osg33.el6
+blahp-debuginfo-1.18.14.bosco-1.osg33.el6
+condor-8.4.0-1.2.osg33.el6
+condor-all-8.4.0-1.2.osg33.el6
+condor-bosco-8.4.0-1.2.osg33.el6
+condor-classads-8.4.0-1.2.osg33.el6
+condor-classads-devel-8.4.0-1.2.osg33.el6
+condor-cream-gahp-8.4.0-1.2.osg33.el6
+condor-debuginfo-8.4.0-1.2.osg33.el6
+condor-kbdd-8.4.0-1.2.osg33.el6
+condor-procd-8.4.0-1.2.osg33.el6
+condor-python-8.4.0-1.2.osg33.el6
+condor-std-universe-8.4.0-1.2.osg33.el6
+condor-test-8.4.0-1.2.osg33.el6
+condor-vm-gahp-8.4.0-1.2.osg33.el6
+edg-mkgridmap-4.0.3-2.osg33.el6
+gip-1.3.11-7.osg33.el6
+glideinwms-3.2.11.2-4.osg33.el6
+glideinwms-common-tools-3.2.11.2-4.osg33.el6
+glideinwms-condor-common-config-3.2.11.2-4.osg33.el6
+glideinwms-factory-3.2.11.2-4.osg33.el6
+glideinwms-factory-condor-3.2.11.2-4.osg33.el6
+glideinwms-glidecondor-tools-3.2.11.2-4.osg33.el6
+glideinwms-libs-3.2.11.2-4.osg33.el6
+glideinwms-minimal-condor-3.2.11.2-4.osg33.el6
+glideinwms-usercollector-3.2.11.2-4.osg33.el6
+glideinwms-userschedd-3.2.11.2-4.osg33.el6
+glideinwms-vofrontend-3.2.11.2-4.osg33.el6
+glideinwms-vofrontend-standalone-3.2.11.2-4.osg33.el6
+gridftp-hdfs-0.5.4-22.osg33.el6
+gridftp-hdfs-debuginfo-0.5.4-22.osg33.el6
+gums-1.5.1-1.osg33.el6
+gums-client-1.5.1-1.osg33.el6
+gums-service-1.5.1-1.osg33.el6
+htcondor-ce-1.16-1.osg33.el6
+htcondor-ce-client-1.16-1.osg33.el6
+htcondor-ce-collector-1.16-1.osg33.el6
+htcondor-ce-condor-1.16-1.osg33.el6
+htcondor-ce-debuginfo-1.16-1.osg33.el6
+htcondor-ce-lsf-1.16-1.osg33.el6
+htcondor-ce-pbs-1.16-1.osg33.el6
+htcondor-ce-sge-1.16-1.osg33.el6
+igtf-ca-certs-1.68-1.osg33.el6
+jglobus-2.1.0-5.osg33.el6
+lcmaps-plugins-mount-under-scratch-0.0.4-1.osg33.el6
+lcmaps-plugins-mount-under-scratch-debuginfo-0.0.4-1.osg33.el6
+osg-ca-certs-1.49-1.osg33.el6
+osg-configure-1.2.2-1.osg33.el6
+osg-configure-ce-1.2.2-1.osg33.el6
+osg-configure-cemon-1.2.2-1.osg33.el6
+osg-configure-condor-1.2.2-1.osg33.el6
+osg-configure-gateway-1.2.2-1.osg33.el6
+osg-configure-gip-1.2.2-1.osg33.el6
+osg-configure-gratia-1.2.2-1.osg33.el6
+osg-configure-infoservices-1.2.2-1.osg33.el6
+osg-configure-lsf-1.2.2-1.osg33.el6
+osg-configure-managedfork-1.2.2-1.osg33.el6
+osg-configure-misc-1.2.2-1.osg33.el6
+osg-configure-monalisa-1.2.2-1.osg33.el6
+osg-configure-network-1.2.2-1.osg33.el6
+osg-configure-pbs-1.2.2-1.osg33.el6
+osg-configure-rsv-1.2.2-1.osg33.el6
+osg-configure-sge-1.2.2-1.osg33.el6
+osg-configure-slurm-1.2.2-1.osg33.el6
+osg-configure-squid-1.2.2-1.osg33.el6
+osg-configure-tests-1.2.2-1.osg33.el6
+osg-test-1.4.30-1.osg33.el6
+osg-tested-internal-3.3-5.osg33.el6
+osg-version-3.3.2-1.osg33.el6
+privilege-xacml-2.6.5-1.osg33.el6
+rsv-3.10.4-1.osg33.el6
+rsv-consumers-3.10.4-1.osg33.el6
+rsv-core-3.10.4-1.osg33.el6
+rsv-metrics-3.10.4-1.osg33.el6
+stashcache-0.6-1.osg33.el6
+stashcache-cache-server-0.6-1.osg33.el6
+stashcache-daemon-0.6-1.osg33.el6
+stashcache-origin-server-0.6-1.osg33.el6
+xrootd-4.2.3-1.osg33.el6
+xrootd-client-4.2.3-1.osg33.el6
+xrootd-client-devel-4.2.3-1.osg33.el6
+xrootd-client-libs-4.2.3-1.osg33.el6
+xrootd-debuginfo-4.2.3-1.osg33.el6
+xrootd-devel-4.2.3-1.osg33.el6
+xrootd-doc-4.2.3-1.osg33.el6
+xrootd-fuse-4.2.3-1.osg33.el6
+xrootd-libs-4.2.3-1.osg33.el6
+xrootd-private-devel-4.2.3-1.osg33.el6
+xrootd-python-4.2.3-1.osg33.el6
+xrootd-selinux-4.2.3-1.osg33.el6
+xrootd-server-4.2.3-1.osg33.el6
+xrootd-server-devel-4.2.3-1.osg33.el6
+xrootd-server-libs-4.2.3-1.osg33.el6
+```
+
+#### Enterprise Linux 7
+
+``` file
+axis-1.4-23.1.osg33.el7
+axis-javadoc-1.4-23.1.osg33.el7
+axis-manual-1.4-23.1.osg33.el7
+blahp-1.18.14.bosco-1.osg33.el7
+blahp-debuginfo-1.18.14.bosco-1.osg33.el7
+condor-8.4.0-1.2.osg33.el7
+condor-all-8.4.0-1.2.osg33.el7
+condor-bosco-8.4.0-1.2.osg33.el7
+condor-classads-8.4.0-1.2.osg33.el7
+condor-classads-devel-8.4.0-1.2.osg33.el7
+condor-debuginfo-8.4.0-1.2.osg33.el7
+condor-kbdd-8.4.0-1.2.osg33.el7
+condor-procd-8.4.0-1.2.osg33.el7
+condor-python-8.4.0-1.2.osg33.el7
+condor-test-8.4.0-1.2.osg33.el7
+condor-vm-gahp-8.4.0-1.2.osg33.el7
+edg-mkgridmap-4.0.3-2.osg33.el7
+gip-1.3.11-7.osg33.el7
+glideinwms-3.2.11.2-4.osg33.el7
+glideinwms-common-tools-3.2.11.2-4.osg33.el7
+glideinwms-condor-common-config-3.2.11.2-4.osg33.el7
+glideinwms-factory-3.2.11.2-4.osg33.el7
+glideinwms-factory-condor-3.2.11.2-4.osg33.el7
+glideinwms-glidecondor-tools-3.2.11.2-4.osg33.el7
+glideinwms-libs-3.2.11.2-4.osg33.el7
+glideinwms-minimal-condor-3.2.11.2-4.osg33.el7
+glideinwms-usercollector-3.2.11.2-4.osg33.el7
+glideinwms-userschedd-3.2.11.2-4.osg33.el7
+glideinwms-vofrontend-3.2.11.2-4.osg33.el7
+glideinwms-vofrontend-standalone-3.2.11.2-4.osg33.el7
+htcondor-ce-1.16-1.osg33.el7
+htcondor-ce-client-1.16-1.osg33.el7
+htcondor-ce-collector-1.16-1.osg33.el7
+htcondor-ce-condor-1.16-1.osg33.el7
+htcondor-ce-debuginfo-1.16-1.osg33.el7
+htcondor-ce-lsf-1.16-1.osg33.el7
+htcondor-ce-pbs-1.16-1.osg33.el7
+htcondor-ce-sge-1.16-1.osg33.el7
+igtf-ca-certs-1.68-1.osg33.el7
+javamail-1.5.0-6.osg33.el7
+javamail-javadoc-1.5.0-6.osg33.el7
+lcmaps-plugins-mount-under-scratch-0.0.4-1.osg33.el7
+lcmaps-plugins-mount-under-scratch-debuginfo-0.0.4-1.osg33.el7
+osg-ca-certs-1.49-1.osg33.el7
+osg-configure-1.2.2-1.osg33.el7
+osg-configure-ce-1.2.2-1.osg33.el7
+osg-configure-cemon-1.2.2-1.osg33.el7
+osg-configure-condor-1.2.2-1.osg33.el7
+osg-configure-gateway-1.2.2-1.osg33.el7
+osg-configure-gip-1.2.2-1.osg33.el7
+osg-configure-gratia-1.2.2-1.osg33.el7
+osg-configure-infoservices-1.2.2-1.osg33.el7
+osg-configure-lsf-1.2.2-1.osg33.el7
+osg-configure-managedfork-1.2.2-1.osg33.el7
+osg-configure-misc-1.2.2-1.osg33.el7
+osg-configure-monalisa-1.2.2-1.osg33.el7
+osg-configure-network-1.2.2-1.osg33.el7
+osg-configure-pbs-1.2.2-1.osg33.el7
+osg-configure-rsv-1.2.2-1.osg33.el7
+osg-configure-sge-1.2.2-1.osg33.el7
+osg-configure-slurm-1.2.2-1.osg33.el7
+osg-configure-squid-1.2.2-1.osg33.el7
+osg-configure-tests-1.2.2-1.osg33.el7
+osg-test-1.4.30-1.osg33.el7
+osg-tested-internal-3.3-5.osg33.el7
+osg-version-3.3.2-1.osg33.el7
+rsv-3.10.4-1_clipped.osg33.el7
+rsv-consumers-3.10.4-1_clipped.osg33.el7
+rsv-core-3.10.4-1_clipped.osg33.el7
+rsv-metrics-3.10.4-1_clipped.osg33.el7
+stashcache-0.6-1.osg33.el7
+stashcache-cache-server-0.6-1.osg33.el7
+stashcache-daemon-0.6-1.osg33.el7
+stashcache-origin-server-0.6-1.osg33.el7
+wsdl4j-1.6.3-3.1.osg33.el7
+wsdl4j-javadoc-1.6.3-3.1.osg33.el7
+xrootd-4.2.3-1.osg33.el7
+xrootd-client-4.2.3-1.osg33.el7
+xrootd-client-devel-4.2.3-1.osg33.el7
+xrootd-client-libs-4.2.3-1.osg33.el7
+xrootd-debuginfo-4.2.3-1.osg33.el7
+xrootd-devel-4.2.3-1.osg33.el7
+xrootd-doc-4.2.3-1.osg33.el7
+xrootd-fuse-4.2.3-1.osg33.el7
+xrootd-libs-4.2.3-1.osg33.el7
+xrootd-private-devel-4.2.3-1.osg33.el7
+xrootd-python-4.2.3-1.osg33.el7
+xrootd-selinux-4.2.3-1.osg33.el7
+xrootd-server-4.2.3-1.osg33.el7
+xrootd-server-devel-4.2.3-1.osg33.el7
+xrootd-server-libs-4.2.3-1.osg33.el7
+```
+
+### Upcoming Packages
+
+We added or updated the following packages to the **upcoming** OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+#### Enterprise Linux 7
+
+### Upcoming RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+```
+
+#### Enterprise Linux 7
+
+``` file
+```
+
+OSG Software Release 3.3.3
+==========================
+
+**Release Date**: 2015-11-03
+
+Summary of changes
+------------------
+
+This release contains:
+
+-   CA certificates based on [IGTF 1.69](https://dist.eugridpma.info/distribution/igtf/current/CHANGES)
+
+These [JIRA tickets](https://jira.opensciencegrid.org/issues/?jql=project%20%3D%20SOFTWARE%20AND%20fixVersion%20%3D%203.3.3%20ORDER%20BY%20priority%20DESC) were addressed in this release.
+
+Detailed changes are below. All of the documentation can be found in the [Release3](https://twiki.grid.iu.edu/bin/view/Documentation/Release3/) area of the TWiki.
+
+CA Certificate Update Information
+---------------------------------
+
+### What Is Changing
+
+A new IGTF Certificate Bundle (v1.69) has just been released. This release has a very important change and we would like our sites to install it as soon as they can.
+
+### Who Is Impacted By This Change:
+
+All OSG sites and users need to install the new CA bundle. Especially US-Atlas and US-CMS sites should install the bundle as soon as possible since their VOs will go under the transition in November/December timeframe.
+
+### Why This Change Is Happening:
+
+The OSG CA is changing its backend service support from Digicert to CILogon HSM. As a result, a new OSG CA is created and just recently been accredited by IGTF. The official name of the new OSG CA in the IGTF bundle is CILogon OSG CA. Starting in November we will transition our VOs to start using the new OSG CA (CMS and Atlas being first ones). If a site has not installed the CA bundle by then, they will have authentication failures.
+
+### What You Should Do:
+
+Install the new CA bundle as soon as possible. The latest CA bundle will NOT be distributed in OSG Software v 3.1 because OSG no longer supports it.
+
+For Linux servers (including worker nodes), ensure that the certificate bundle RPM is at version osg-ca-certs-1.50-1 or igtf-ca-certs-1.69-1 or greater.
+
+Instructions for installing server CA certificate bundles are at <https://twiki.grid.iu.edu/bin/view/Documentation/Release3/InstallCertAuth>
+
+We also highly recommend that you use the CA Cert automatic updater <https://twiki.grid.iu.edu/bin/view/Documentation/Release3/OsgCaCertsUpdater> but note that you need to be using a current OSG software distribution for that to work, that is, OSG 3.2 or 3.3.
+
+### Other Information:
+
+If you have the CA certificate bundle installed on a server with OSG 3.1, you need to upgrade to OSG 3.2 or greater. Follow these instructions: <https://twiki.grid.iu.edu/bin/view/Documentation/Release3/OSGReleaseSeries#Updating_from_OSG_3_1_or_3_2_to>
+
+Please email OSG Security Team with questions or comments
+
+Known Issues
+------------
+
+-   HTCondor 8.4.0 has changed it's behavior in ways that cause the GlideinWMS frontend configuration to break. In order to correct this, the following setting needs to be added to the configuration file:
+
+        :::file
+        COLLECTOR_USES_SHARED_PORT = False
+
+-   StashCache packages need to be manually configured
+    -   Manual configuration for origin server
+        -   Assuming that the origin server connects only to a redirector (not directly to cache server), minimal xrootd configuration is required. The configuration file, /etc/xrootd/xrootd-stashcache-origin-server.cfg, in this release is overkill. Here are recommended settings to use:
+
+                :::file
+                xrd.port 1094
+                all.role server
+                all.manager stash-redirector.example.com 1213
+                all.export / nostage
+                xrootd.trace emsg login stall redirect
+                ofs.trace none
+                xrd.trace conn
+                cms.trace all
+                sec.protocol  host
+                sec.protbind  * none
+                all.adminpath /var/run/xrootd
+                all.pidpath /var/run/xrootd
+
+-   Manual configuration for cache server
+    -   In contrast to the origin server configuration, one needs to declare `pss.origin <stash-redirector.example.com>` instead of configuring the cmsd or manager (only the xrootd daemon is required on the cache server). More detailed configuration of cache server for StashCache is [here](https://confluence.grid.iu.edu/pages/viewpage.action?title=Installing+an+XRootD+server+for+Stash+Cache&spaceKey=STAS).
+-   In both cases, administrator needs to set the path of custom configuration file for its xrootd/cmds instance in /etc/sysconfig/xrootd, For example, change the cmds default from:
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-clustered.cfg -k fifo"
+<br/>
+
+    to
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-stashcache-origin-server.marian -k fifo" 
+
+Updating to the new release
+---------------------------
+
+### Update Repositories
+
+To update to this series, you need [install the current OSG repositories](../../common/yum#install-osg-repositories).
+
+### Update Software
+
+Once the new repositories are installed, you can update to this new release with:
+
+``` console
+[root@client ~] $ yum update
+```
+
+<span class="twiki-macro NOTE"></span> Please be aware that running `yum update` may also update other RPMs. You can exclude packages from being updated using the `--exclude=[package-name or glob]` option for the `yum` command.
+
+<span class="twiki-macro NOTE"></span> Watch the yum update carefully for any messages about a `.rpmnew` file being created. That means that a configuration file had been editted, and a new default version was to be installed. In that case, RPM does not overwrite the editted configuration file but instead installs the new version with a `.rpmnew` extension. You will need to merge any edits that have made into the `.rpmnew` file and then move the merged version into place (that is, without the `.rpmnew` extension). Watch especially for `/etc/lcmaps.db`, which every site is expected to edit.
+
+Need help?
+----------
+
+Do you need help with this release? [Contact us for help](../../common/help).
+
+Detailed changes in this release
+--------------------------------
+
+### Packages
+
+We added or updated the following packages to the production OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+-   [igtf-ca-certs-1.69-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=igtf-ca-certs-1.69-1.osg33.el6)
+-   [osg-ca-certs-1.50-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-ca-certs-1.50-1.osg33.el6)
+-   [osg-version-3.3.3-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.3-1.osg33.el6)
+
+#### Enterprise Linux 7
+
+-   [igtf-ca-certs-1.69-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=igtf-ca-certs-1.69-1.osg33.el7)
+-   [osg-ca-certs-1.50-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-ca-certs-1.50-1.osg33.el7)
+-   [osg-version-3.3.3-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.3-1.osg33.el7)
+
+### RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+    igtf-ca-certs osg-ca-certs osg-version
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+igtf-ca-certs-1.69-1.osg33.el6
+osg-ca-certs-1.50-1.osg33.el6
+osg-version-3.3.3-1.osg33.el6
+```
+
+#### Enterprise Linux 7
+
+``` file
+igtf-ca-certs-1.69-1.osg33.el7
+osg-ca-certs-1.50-1.osg33.el7
+osg-version-3.3.3-1.osg33.el7
+```
+
+### Upcoming Packages
+
+We added or updated the following packages to the **upcoming** OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+#### Enterprise Linux 7
+
+### Upcoming RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+```
+
+#### Enterprise Linux 7
+
+``` file
+```
+
+OSG Software Release 3.3.4
+==========================
+
+**Release Date**: 2015-11-10
+
+Summary of changes
+------------------
+
+This release builds on the special OSG CA certificate release of November 3rd by making it easier to update from separate installations of the main CA certificate bundle and the new CILogon OSG CA. For hosts with only the main CA certificate bundle, there is no change.
+
+This release contains:
+
+-   Updated CVMFS configuration to support approved repositories from any domain
+-   Fixed osg-ca-certs-updater to work when no "compat" packages are present
+-   Added a new LCMAPS plug-in for process tracking
+-   Added a new RSV PerfSONAR probe
+-   Added a new RSV probe to check StashCache cache collector ads at the GOC
+-   EL 7: Fixed Frontier Squid to start up properly after a reboot
+-   EL 7: Fixed the MyProxy service to start up properly
+
+These [JIRA tickets](https://jira.opensciencegrid.org/issues/?jql=project%20%3D%20SOFTWARE%20AND%20fixVersion%20%3D%203.3.4%20ORDER%20BY%20priority%20DESC) were addressed in this release.
+
+Detailed changes are below. All of the documentation can be found in the [Release3](https://twiki.grid.iu.edu/bin/view/Documentation/Release3/) area of the TWiki.
+
+Known Issues
+------------
+
+-   CILogon CA certificate files have been reorganized between our various CA certificate packages.  
+To avoid file conflicts, you should upgrade your CA certificate RPMs at the same time, such as via the following command:  
+<pre class="rootscreen">[root@client ~] $ yum update '\*-ca-cert\*'</pre>
+-   When using osg-configure to configure a CE host, it will fail because it tries to contact a ReSS server that has been shut down permanently. The ReSS service has been deprecated since early 2014, and support for it will be removed from osg-configure in an upcoming version. To work around this osg-configure failure now, edit /etc/osg/config.d/30-infoservices.ini and set the option:
+
+        :::file
+        ress_servers = https://localhost[RAW]
+
+-   There is a known memory leak in lcmaps-plugins-scas-client that HTCondor-CE triggers repeatedly. A special OSG release, coming soon, will fix the underlying memory leak, but in the meantime it is possible to make two small configuration changes to slow the rate at which memory leaks.
+    1.  In /etc/condor-ce/config.d/01-ce-auth.conf, make sure the following attribute is defined as follows (note the $(USERS) at the end):
+
+            :::file
+            COLLECTOR.ALLOW_ADVERTISE_STARTD =  $(UNMAPPED_USERS), $(USERS)
+
+1.  Also in /etc/condor-ce/config.d/01-ce-auth.conf, add the following line to the end of the file:
+
+        ::: file
+        GSS_ASSIST_GRIDMAP_CACHE_EXPIRATION = 30*$(MINUTE)
+
+1.  Verify that the attributes are set properly by running the following command:
+
+        ::: file
+        $ condor_ce_config_val COLLECTOR.ALLOW_ADVERTISE_STARTD GSS_ASSIST_GRIDMAP_CACHE_EXPIRATION
+        *@unmapped.opensciencegrid.org, *@users.opensciencegrid.org
+        30*60
+
+-   HTCondor 8.4.0 has changed it's behavior in ways that cause the GlideinWMS frontend configuration to break. In order to correct this, the following setting needs to be added to the configuration file:
+
+        :::file
+        COLLECTOR_USES_SHARED_PORT = False
+
+-   StashCache packages need to be manually configured
+    -   Manual configuration for origin server
+        -   Assuming that the origin server connects only to a redirector (not directly to cache server), minimal xrootd configuration is required. The configuration file, /etc/xrootd/xrootd-stashcache-origin-server.cfg, in this release is overkill. Here are recommended settings to use:
+
+                :::file
+                xrd.port 1094
+                all.role server
+                all.manager stash-redirector.example.com 1213
+                all.export / nostage
+                xrootd.trace emsg login stall redirect
+                ofs.trace none
+                xrd.trace conn
+                cms.trace all
+                sec.protocol  host
+                sec.protbind  * none
+                all.adminpath /var/run/xrootd
+                all.pidpath /var/run/xrootd
+
+-   Manual configuration for cache server
+    -   In contrast to the origin server configuration, one needs to declare `pss.origin <stash-redirector.example.com>` instead of configuring the cmsd or manager (only the xrootd daemon is required on the cache server). More detailed configuration of cache server for StashCache is [here](https://confluence.grid.iu.edu/pages/viewpage.action?title=Installing+an+XRootD+server+for+Stash+Cache&spaceKey=STAS).
+-   In both cases, administrator needs to set the path of custom configuration file for its xrootd/cmds instance in /etc/sysconfig/xrootd, For example, change the cmds default from:
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-clustered.cfg -k fifo"
+<br/>
+
+    to
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-stashcache-origin-server.marian -k fifo" 
+
+Updating to the new release
+---------------------------
+
+### Update Repositories
+
+To update to this series, you need [install the current OSG repositories](../../common/yum#install-osg-repositories).
+
+### Update Software
+
+Once the new repositories are installed, you can update to this new release with:
+
+``` console
+[root@client ~] $ yum update
+```
+
+<span class="twiki-macro NOTE"></span> Please be aware that running `yum update` may also update other RPMs. You can exclude packages from being updated using the `--exclude=[package-name or glob]` option for the `yum` command.
+
+<span class="twiki-macro NOTE"></span> Watch the yum update carefully for any messages about a `.rpmnew` file being created. That means that a configuration file had been editted, and a new default version was to be installed. In that case, RPM does not overwrite the editted configuration file but instead installs the new version with a `.rpmnew` extension. You will need to merge any edits that have made into the `.rpmnew` file and then move the merged version into place (that is, without the `.rpmnew` extension). Watch especially for `/etc/lcmaps.db`, which every site is expected to edit.
+
+Need help?
+----------
+
+Do you need help with this release? [Contact us for help](../../common/help).
+
+Detailed changes in this release
+--------------------------------
+
+### Packages
+
+We added or updated the following packages to the production OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+-   [cilogon-openid-ca-cert-1.1-3.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=cilogon-openid-ca-cert-1.1-3.osg33.el6)
+-   [cilogon-osg-ca-cert-1.0-2.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=cilogon-osg-ca-cert-1.0-2.osg33.el6)
+-   [cvmfs-config-osg-1.1-8.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=cvmfs-config-osg-1.1-8.osg33.el6)
+-   [frontier-squid-2.7.STABLE9-24.2.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=frontier-squid-2.7.STABLE9-24.2.osg33.el6)
+-   [jglobus-2.1.0-6.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=jglobus-2.1.0-6.osg33.el6)
+-   [lcmaps-plugins-process-tracking-0.3-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=lcmaps-plugins-process-tracking-0.3-1.osg33.el6)
+-   [myproxy-6.1.12-1.1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=myproxy-6.1.12-1.1.osg33.el6)
+-   [osg-ca-certs-updater-1.3-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-ca-certs-updater-1.3-1.osg33.el6)
+-   [osg-oasis-5-3.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-oasis-5-3.osg33.el6)
+-   [osg-test-1.4.31-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-test-1.4.31-1.osg33.el6)
+-   [osg-version-3.3.4-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.4-1.osg33.el6)
+-   [rsv-3.12.0-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=rsv-3.12.0-1.osg33.el6)
+-   [rsv-perfsonar-1.1.1-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=rsv-perfsonar-1.1.1-1.osg33.el6)
+
+#### Enterprise Linux 7
+
+-   [cilogon-openid-ca-cert-1.1-3.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=cilogon-openid-ca-cert-1.1-3.osg33.el7)
+-   [cilogon-osg-ca-cert-1.0-2.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=cilogon-osg-ca-cert-1.0-2.osg33.el7)
+-   [cvmfs-config-osg-1.1-8.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=cvmfs-config-osg-1.1-8.osg33.el7)
+-   [frontier-squid-2.7.STABLE9-24.2.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=frontier-squid-2.7.STABLE9-24.2.osg33.el7)
+-   [jglobus-2.1.0-6.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=jglobus-2.1.0-6.osg33.el7)
+-   [lcmaps-plugins-process-tracking-0.3-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=lcmaps-plugins-process-tracking-0.3-1.osg33.el7)
+-   [myproxy-6.1.12-1.1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=myproxy-6.1.12-1.1.osg33.el7)
+-   [osg-ca-certs-updater-1.3-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-ca-certs-updater-1.3-1.osg33.el7)
+-   [osg-oasis-5-3.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-oasis-5-3.osg33.el7)
+-   [osg-test-1.4.31-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-test-1.4.31-1.osg33.el7)
+-   [osg-version-3.3.4-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.4-1.osg33.el7)
+-   [rsv-3.12.0-1\_clipped.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=rsv-3.12.0-1_clipped.osg33.el7)
+-   [rsv-perfsonar-1.1.1-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=rsv-perfsonar-1.1.1-1.osg33.el7)
+
+### RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+    cilogon-openid-ca-cert cilogon-osg-ca-cert cvmfs-config-osg frontier-squid frontier-squid-debuginfo jglobus lcmaps-plugins-process-tracking lcmaps-plugins-process-tracking-debuginfo myproxy myproxy-admin myproxy-debuginfo myproxy-devel myproxy-doc myproxy-libs myproxy-server myproxy-voms osg-ca-certs-updater osg-oasis osg-test osg-version rsv rsv-consumers rsv-core rsv-metrics rsv-perfsonar
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+cilogon-openid-ca-cert-1.1-3.osg33.el6
+cilogon-osg-ca-cert-1.0-2.osg33.el6
+cvmfs-config-osg-1.1-8.osg33.el6
+frontier-squid-2.7.STABLE9-24.2.osg33.el6
+frontier-squid-debuginfo-2.7.STABLE9-24.2.osg33.el6
+jglobus-2.1.0-6.osg33.el6
+lcmaps-plugins-process-tracking-0.3-1.osg33.el6
+lcmaps-plugins-process-tracking-debuginfo-0.3-1.osg33.el6
+myproxy-6.1.12-1.1.osg33.el6
+myproxy-admin-6.1.12-1.1.osg33.el6
+myproxy-debuginfo-6.1.12-1.1.osg33.el6
+myproxy-devel-6.1.12-1.1.osg33.el6
+myproxy-doc-6.1.12-1.1.osg33.el6
+myproxy-libs-6.1.12-1.1.osg33.el6
+myproxy-server-6.1.12-1.1.osg33.el6
+myproxy-voms-6.1.12-1.1.osg33.el6
+osg-ca-certs-updater-1.3-1.osg33.el6
+osg-oasis-5-3.osg33.el6
+osg-test-1.4.31-1.osg33.el6
+osg-version-3.3.4-1.osg33.el6
+rsv-3.12.0-1.osg33.el6
+rsv-consumers-3.12.0-1.osg33.el6
+rsv-core-3.12.0-1.osg33.el6
+rsv-metrics-3.12.0-1.osg33.el6
+rsv-perfsonar-1.1.1-1.osg33.el6
+```
+
+#### Enterprise Linux 7
+
+``` file
+cilogon-openid-ca-cert-1.1-3.osg33.el7
+cilogon-osg-ca-cert-1.0-2.osg33.el7
+cvmfs-config-osg-1.1-8.osg33.el7
+frontier-squid-2.7.STABLE9-24.2.osg33.el7
+frontier-squid-debuginfo-2.7.STABLE9-24.2.osg33.el7
+jglobus-2.1.0-6.osg33.el7
+lcmaps-plugins-process-tracking-0.3-1.osg33.el7
+lcmaps-plugins-process-tracking-debuginfo-0.3-1.osg33.el7
+myproxy-6.1.12-1.1.osg33.el7
+myproxy-admin-6.1.12-1.1.osg33.el7
+myproxy-debuginfo-6.1.12-1.1.osg33.el7
+myproxy-devel-6.1.12-1.1.osg33.el7
+myproxy-doc-6.1.12-1.1.osg33.el7
+myproxy-libs-6.1.12-1.1.osg33.el7
+myproxy-server-6.1.12-1.1.osg33.el7
+myproxy-voms-6.1.12-1.1.osg33.el7
+osg-ca-certs-updater-1.3-1.osg33.el7
+osg-oasis-5-3.osg33.el7
+osg-test-1.4.31-1.osg33.el7
+osg-version-3.3.4-1.osg33.el7
+rsv-3.12.0-1_clipped.osg33.el7
+rsv-consumers-3.12.0-1_clipped.osg33.el7
+rsv-core-3.12.0-1_clipped.osg33.el7
+rsv-metrics-3.12.0-1_clipped.osg33.el7
+rsv-perfsonar-1.1.1-1.osg33.el7
+```
+
+### Upcoming Packages
+
+We added or updated the following packages to the **upcoming** OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+#### Enterprise Linux 7
+
+### Upcoming RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+```
+
+#### Enterprise Linux 7
+
+``` file
+```
+
+OSG Software Release 3.3.5
+==========================
+
+**Release Date**: 2015-11-19
+
+Summary of changes
+------------------
+
+This release contains:
+
+-   lcmaps-plugins-scas-client
+    -   Fixed a leak that caused HTCondor CE to use excessive memory
+-   osg-configure
+    -   Fixed a crash when attempting to connect to the recently retired ReSS servers while configuring a CE
+    -   Now reconfigures the HTCondor CE after generating job environment files
+-   HTCondor CE 1.20
+    -   Users can now add onto accounting group defaults set by the job router
+    -   Use GSI mapping cache to reduce calls to GSI
+-   [HTCondor 8.4.2](https://www-auth.cs.wisc.edu/lists/htcondor-users/2015-November/msg00083.shtml)
+-   RSV
+    -   Corrected log rotation configuration error introduced in 3.2.30/3.3.4
+
+These [JIRA tickets](https://jira.opensciencegrid.org/issues/?jql=project%20%3D%20SOFTWARE%20AND%20fixVersion%20%3D%203.3.5%20ORDER%20BY%20priority%20DESC) were addressed in this release.
+
+Detailed changes are below. All of the documentation can be found in the [Release3](https://twiki.grid.iu.edu/bin/view/Documentation/Release3/) area of the TWiki.
+
+Known Issues
+------------
+
+-   CILogon CA certificate files have been reorganized between our various CA certificate packages.  
+To avoid file conflicts, you should upgrade your CA certificate RPMs at the same time, such as via the following command:  
+<pre class="rootscreen">[root@client ~] $ yum update '\*-ca-cert\*'</pre>
+
+<!-- -->
+
+-   HTCondor 8.4.0 has changed it's behavior in ways that cause the GlideinWMS frontend configuration to break. In order to correct this, the following setting needs to be added to the configuration file:
+
+        :::file
+        COLLECTOR_USES_SHARED_PORT = False
+
+-   StashCache packages need to be manually configured
+    -   Manual configuration for origin server
+        -   Assuming that the origin server connects only to a redirector (not directly to cache server), minimal xrootd configuration is required. The configuration file, /etc/xrootd/xrootd-stashcache-origin-server.cfg, in this release is overkill. Here are recommended settings to use:
+
+                :::file
+                xrd.port 1094
+                all.role server
+                all.manager stash-redirector.example.com 1213
+                all.export / nostage
+                xrootd.trace emsg login stall redirect
+                ofs.trace none
+                xrd.trace conn
+                cms.trace all
+                sec.protocol  host
+                sec.protbind  * none
+                all.adminpath /var/run/xrootd
+                all.pidpath /var/run/xrootd
+
+-   Manual configuration for cache server
+    -   In contrast to the origin server configuration, one needs to declare `pss.origin <stash-redirector.example.com>` instead of configuring the cmsd or manager (only the xrootd daemon is required on the cache server). More detailed configuration of cache server for StashCache is [here](https://confluence.grid.iu.edu/pages/viewpage.action?title=Installing+an+XRootD+server+for+Stash+Cache&spaceKey=STAS).
+-   In both cases, administrator needs to set the path of custom configuration file for its xrootd/cmds instance in /etc/sysconfig/xrootd, For example, change the cmds default from:
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-clustered.cfg -k fifo"
+<br/>
+
+    to
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-stashcache-origin-server.marian -k fifo" 
+
+Updating to the new release
+---------------------------
+
+### Update Repositories
+
+To update to this series, you need [install the current OSG repositories](../../common/yum#install-osg-repositories).
+
+### Update Software
+
+Once the new repositories are installed, you can update to this new release with:
+
+``` console
+[root@client ~] $ yum update
+```
+
+<span class="twiki-macro NOTE"></span> Please be aware that running `yum update` may also update other RPMs. You can exclude packages from being updated using the `--exclude=[package-name or glob]` option for the `yum` command.
+
+<span class="twiki-macro NOTE"></span> Watch the yum update carefully for any messages about a `.rpmnew` file being created. That means that a configuration file had been editted, and a new default version was to be installed. In that case, RPM does not overwrite the editted configuration file but instead installs the new version with a `.rpmnew` extension. You will need to merge any edits that have made into the `.rpmnew` file and then move the merged version into place (that is, without the `.rpmnew` extension). Watch especially for `/etc/lcmaps.db`, which every site is expected to edit.
+
+Need help?
+----------
+
+Do you need help with this release? [Contact us for help](../../common/help).
+
+Detailed changes in this release
+--------------------------------
+
+### Packages
+
+We added or updated the following packages to the production OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+-   [blahp-1.18.15.bosco-3.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=blahp-1.18.15.bosco-3.osg33.el6)
+-   [condor-8.4.2-1.1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=condor-8.4.2-1.1.osg33.el6)
+-   [htcondor-ce-1.20-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=htcondor-ce-1.20-1.osg33.el6)
+-   [lcmaps-plugins-scas-client-0.5.5-1.1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=lcmaps-plugins-scas-client-0.5.5-1.1.osg33.el6)
+-   [osg-configure-1.2.4-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-configure-1.2.4-1.osg33.el6)
+-   [osg-version-3.3.5-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.5-1.osg33.el6)
+-   [rsv-3.12.5-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=rsv-3.12.5-1.osg33.el6)
+
+#### Enterprise Linux 7
+
+-   [blahp-1.18.15.bosco-3.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=blahp-1.18.15.bosco-3.osg33.el7)
+-   [condor-8.4.2-1.1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=condor-8.4.2-1.1.osg33.el7)
+-   [htcondor-ce-1.20-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=htcondor-ce-1.20-1.osg33.el7)
+-   [lcmaps-plugins-scas-client-0.5.5-1.1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=lcmaps-plugins-scas-client-0.5.5-1.1.osg33.el7)
+-   [osg-configure-1.2.4-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-configure-1.2.4-1.osg33.el7)
+-   [osg-version-3.3.5-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.5-1.osg33.el7)
+-   [rsv-3.12.5-1\_clipped.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=rsv-3.12.5-1_clipped.osg33.el7)
+
+### RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+    blahp blahp-debuginfo condor condor-all condor-bosco condor-classads condor-classads-devel condor-cream-gahp condor-debuginfo condor-kbdd condor-procd condor-python condor-std-universe condor-test condor-vm-gahp htcondor-ce htcondor-ce-client htcondor-ce-collector htcondor-ce-condor htcondor-ce-debuginfo htcondor-ce-lsf htcondor-ce-pbs htcondor-ce-sge lcmaps-plugins-scas-client lcmaps-plugins-scas-client-debuginfo osg-configure osg-configure-ce osg-configure-cemon osg-configure-condor osg-configure-gateway osg-configure-gip osg-configure-gratia osg-configure-infoservices osg-configure-lsf osg-configure-managedfork osg-configure-misc osg-configure-monalisa osg-configure-network osg-configure-pbs osg-configure-rsv osg-configure-sge osg-configure-slurm osg-configure-squid osg-configure-tests osg-version rsv rsv-consumers rsv-core rsv-metrics
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+blahp-1.18.15.bosco-3.osg33.el6
+blahp-debuginfo-1.18.15.bosco-3.osg33.el6
+condor-8.4.2-1.1.osg33.el6
+condor-all-8.4.2-1.1.osg33.el6
+condor-bosco-8.4.2-1.1.osg33.el6
+condor-classads-8.4.2-1.1.osg33.el6
+condor-classads-devel-8.4.2-1.1.osg33.el6
+condor-cream-gahp-8.4.2-1.1.osg33.el6
+condor-debuginfo-8.4.2-1.1.osg33.el6
+condor-kbdd-8.4.2-1.1.osg33.el6
+condor-procd-8.4.2-1.1.osg33.el6
+condor-python-8.4.2-1.1.osg33.el6
+condor-std-universe-8.4.2-1.1.osg33.el6
+condor-test-8.4.2-1.1.osg33.el6
+condor-vm-gahp-8.4.2-1.1.osg33.el6
+htcondor-ce-1.20-1.osg33.el6
+htcondor-ce-client-1.20-1.osg33.el6
+htcondor-ce-collector-1.20-1.osg33.el6
+htcondor-ce-condor-1.20-1.osg33.el6
+htcondor-ce-debuginfo-1.20-1.osg33.el6
+htcondor-ce-lsf-1.20-1.osg33.el6
+htcondor-ce-pbs-1.20-1.osg33.el6
+htcondor-ce-sge-1.20-1.osg33.el6
+lcmaps-plugins-scas-client-0.5.5-1.1.osg33.el6
+lcmaps-plugins-scas-client-debuginfo-0.5.5-1.1.osg33.el6
+osg-configure-1.2.4-1.osg33.el6
+osg-configure-ce-1.2.4-1.osg33.el6
+osg-configure-cemon-1.2.4-1.osg33.el6
+osg-configure-condor-1.2.4-1.osg33.el6
+osg-configure-gateway-1.2.4-1.osg33.el6
+osg-configure-gip-1.2.4-1.osg33.el6
+osg-configure-gratia-1.2.4-1.osg33.el6
+osg-configure-infoservices-1.2.4-1.osg33.el6
+osg-configure-lsf-1.2.4-1.osg33.el6
+osg-configure-managedfork-1.2.4-1.osg33.el6
+osg-configure-misc-1.2.4-1.osg33.el6
+osg-configure-monalisa-1.2.4-1.osg33.el6
+osg-configure-network-1.2.4-1.osg33.el6
+osg-configure-pbs-1.2.4-1.osg33.el6
+osg-configure-rsv-1.2.4-1.osg33.el6
+osg-configure-sge-1.2.4-1.osg33.el6
+osg-configure-slurm-1.2.4-1.osg33.el6
+osg-configure-squid-1.2.4-1.osg33.el6
+osg-configure-tests-1.2.4-1.osg33.el6
+osg-version-3.3.5-1.osg33.el6
+rsv-3.12.5-1.osg33.el6
+rsv-consumers-3.12.5-1.osg33.el6
+rsv-core-3.12.5-1.osg33.el6
+rsv-metrics-3.12.5-1.osg33.el6
+```
+
+#### Enterprise Linux 7
+
+``` file
+blahp-1.18.15.bosco-3.osg33.el7
+blahp-debuginfo-1.18.15.bosco-3.osg33.el7
+condor-8.4.2-1.1.osg33.el7
+condor-all-8.4.2-1.1.osg33.el7
+condor-bosco-8.4.2-1.1.osg33.el7
+condor-classads-8.4.2-1.1.osg33.el7
+condor-classads-devel-8.4.2-1.1.osg33.el7
+condor-debuginfo-8.4.2-1.1.osg33.el7
+condor-kbdd-8.4.2-1.1.osg33.el7
+condor-procd-8.4.2-1.1.osg33.el7
+condor-python-8.4.2-1.1.osg33.el7
+condor-test-8.4.2-1.1.osg33.el7
+condor-vm-gahp-8.4.2-1.1.osg33.el7
+htcondor-ce-1.20-1.osg33.el7
+htcondor-ce-client-1.20-1.osg33.el7
+htcondor-ce-collector-1.20-1.osg33.el7
+htcondor-ce-condor-1.20-1.osg33.el7
+htcondor-ce-debuginfo-1.20-1.osg33.el7
+htcondor-ce-lsf-1.20-1.osg33.el7
+htcondor-ce-pbs-1.20-1.osg33.el7
+htcondor-ce-sge-1.20-1.osg33.el7
+lcmaps-plugins-scas-client-0.5.5-1.1.osg33.el7
+lcmaps-plugins-scas-client-debuginfo-0.5.5-1.1.osg33.el7
+osg-configure-1.2.4-1.osg33.el7
+osg-configure-ce-1.2.4-1.osg33.el7
+osg-configure-cemon-1.2.4-1.osg33.el7
+osg-configure-condor-1.2.4-1.osg33.el7
+osg-configure-gateway-1.2.4-1.osg33.el7
+osg-configure-gip-1.2.4-1.osg33.el7
+osg-configure-gratia-1.2.4-1.osg33.el7
+osg-configure-infoservices-1.2.4-1.osg33.el7
+osg-configure-lsf-1.2.4-1.osg33.el7
+osg-configure-managedfork-1.2.4-1.osg33.el7
+osg-configure-misc-1.2.4-1.osg33.el7
+osg-configure-monalisa-1.2.4-1.osg33.el7
+osg-configure-network-1.2.4-1.osg33.el7
+osg-configure-pbs-1.2.4-1.osg33.el7
+osg-configure-rsv-1.2.4-1.osg33.el7
+osg-configure-sge-1.2.4-1.osg33.el7
+osg-configure-slurm-1.2.4-1.osg33.el7
+osg-configure-squid-1.2.4-1.osg33.el7
+osg-configure-tests-1.2.4-1.osg33.el7
+osg-version-3.3.5-1.osg33.el7
+rsv-3.12.5-1_clipped.osg33.el7
+rsv-consumers-3.12.5-1_clipped.osg33.el7
+rsv-core-3.12.5-1_clipped.osg33.el7
+rsv-metrics-3.12.5-1_clipped.osg33.el7
+```
+
+### Upcoming Packages
+
+We added or updated the following packages to the **upcoming** OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+#### Enterprise Linux 7
+
+### Upcoming RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+```
+
+#### Enterprise Linux 7
+
+``` file
+```
+
+OSG Software Release 3.3.6
+==========================
+
+**Release Date**: 2015-12-08
+
+Summary of changes
+------------------
+
+This release contains:
+
+-   Fixed a bug that prevented HTCondor 8.4's CREAM gahp from starting
+-   CA certificates based on [IGTF 1.70](https://dist.eugridpma.info/distribution/igtf/current/CHANGES)
+    -   Updated CRL URL hosted by KIT for ArmeSFO (AM)
+    -   Added NorduGrid 2015 trust anchor (DK,NO,SE,FI,IS)
+    -   Discontinued superseded DigiCertGridCA-1G2-Classic (US)
+-   Restored the 'Sign AUP on behalf of user' feature in VOMS Admin Server
+
+These [JIRA tickets](https://jira.opensciencegrid.org/issues/?jql=project%20%3D%20SOFTWARE%20AND%20fixVersion%20%3D%203.3.6%20ORDER%20BY%20priority%20DESC) were addressed in this release.
+
+Detailed changes are below. All of the documentation can be found in the [Release3](https://twiki.grid.iu.edu/bin/view/Documentation/Release3/) area of the TWiki.
+
+Known Issues
+------------
+
+-   The `osg-cert-request` and `osg-gridadmin-cert-request` may return `CILogon 500` errors when retrieving certificates. To fix this, follow the below instructions:
+    1.  Save the following text (including the empty line at the end) to `~/osgpkitools.patch`:  
+    <pre class="file">Index: OSGPKIUtils.py
+
+**`===============================================================`** --- OSGPKIUtils.py (revision 22192) +++ OSGPKIUtils.py (revision 22193) @@ -362,6 +362,7 @@ \#
+
+self.X509Request.set\_pubkey(pkey=self.PKey) + self.X509Request.set\_version(0) self.X509Request.sign(pkey=self.PKey, md='sha1') return self.X509Request
+
+</pre>
+
+1.  `cd` into the appropriate folder:  
+<pre class="rootscreen">\# For EL5 hosts:
+
+[root@client ~] $ cd /usr/lib/python2.4/site-packages/osgpkitools/ \# For EL6 hosts: [root@client ~] $ cd /usr/lib/python2.6/site-packages/osgpkitools/</pre>
+
+1.  Apply the patch:  
+<pre class="rootscreen">[root@client ~] $ patch < ~/osgpkitools.patch</pre> \* HTCondor 8.4.0 has changed it's behavior in ways that cause the GlideinWMS frontend configuration to break. In order to correct this, the following setting needs to be added to the configuration file:
+
+        :::file
+        COLLECTOR_USES_SHARED_PORT = False
+
+-   StashCache packages need to be manually configured
+    -   Manual configuration for origin server
+        -   Assuming that the origin server connects only to a redirector (not directly to cache server), minimal xrootd configuration is required. The configuration file, /etc/xrootd/xrootd-stashcache-origin-server.cfg, in this release is overkill. Here are recommended settings to use:
+
+                :::file
+                xrd.port 1094
+                all.role server
+                all.manager stash-redirector.example.com 1213
+                all.export / nostage
+                xrootd.trace emsg login stall redirect
+                ofs.trace none
+                xrd.trace conn
+                cms.trace all
+                sec.protocol  host
+                sec.protbind  * none
+                all.adminpath /var/run/xrootd
+                all.pidpath /var/run/xrootd
+
+-   Manual configuration for cache server
+    -   In contrast to the origin server configuration, one needs to declare `pss.origin <stash-redirector.example.com>` instead of configuring the cmsd or manager (only the xrootd daemon is required on the cache server). More detailed configuration of cache server for StashCache is [here](https://confluence.grid.iu.edu/pages/viewpage.action?title=Installing+an+XRootD+server+for+Stash+Cache&spaceKey=STAS).
+-   In both cases, administrator needs to set the path of custom configuration file for its xrootd/cmds instance in /etc/sysconfig/xrootd, For example, change the cmds default from:
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-clustered.cfg -k fifo"
+<br/>
+
+to
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-stashcache-origin-server.marian -k fifo" 
+
+Updating to the new release
+---------------------------
+
+### Update Repositories
+
+To update to this series, you need [install the current OSG repositories](../../common/yum#install-osg-repositories).
+
+### Update Software
+
+Once the new repositories are installed, you can update to this new release with:
+
+``` console
+[root@client ~] $ yum update
+```
+
+<span class="twiki-macro NOTE"></span> Please be aware that running `yum update` may also update other RPMs. You can exclude packages from being updated using the `--exclude=[package-name or glob]` option for the `yum` command.
+
+<span class="twiki-macro NOTE"></span> Watch the yum update carefully for any messages about a `.rpmnew` file being created. That means that a configuration file had been editted, and a new default version was to be installed. In that case, RPM does not overwrite the editted configuration file but instead installs the new version with a `.rpmnew` extension. You will need to merge any edits that have made into the `.rpmnew` file and then move the merged version into place (that is, without the `.rpmnew` extension). Watch especially for `/etc/lcmaps.db`, which every site is expected to edit.
+
+Need help?
+----------
+
+Do you need help with this release? [Contact us for help](../../common/help).
+
+Detailed changes in this release
+--------------------------------
+
+### Packages
+
+We added or updated the following packages to the production OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+-   [condor-8.4.2-1.2.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=condor-8.4.2-1.2.osg33.el6)
+-   [gip-1.3.11-8.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=gip-1.3.11-8.osg33.el6)
+-   [igtf-ca-certs-1.70-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=igtf-ca-certs-1.70-1.osg33.el6)
+-   [osg-ca-certs-1.51-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-ca-certs-1.51-1.osg33.el6)
+-   [osg-configure-1.2.5-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-configure-1.2.5-1.osg33.el6)
+-   [osg-info-services-1.1.0-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-info-services-1.1.0-1.osg33.el6)
+-   [osg-test-1.4.32-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-test-1.4.32-1.osg33.el6)
+-   [osg-version-3.3.6-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.6-1.osg33.el6)
+-   [voms-admin-server-2.7.0-1.17.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=voms-admin-server-2.7.0-1.17.osg33.el6)
+
+#### Enterprise Linux 7
+
+-   [condor-8.4.2-1.2.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=condor-8.4.2-1.2.osg33.el7)
+-   [gip-1.3.11-8.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=gip-1.3.11-8.osg33.el7)
+-   [igtf-ca-certs-1.70-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=igtf-ca-certs-1.70-1.osg33.el7)
+-   [osg-ca-certs-1.51-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-ca-certs-1.51-1.osg33.el7)
+-   [osg-configure-1.2.5-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-configure-1.2.5-1.osg33.el7)
+-   [osg-info-services-1.1.0-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-info-services-1.1.0-1.osg33.el7)
+-   [osg-test-1.4.32-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-test-1.4.32-1.osg33.el7)
+-   [osg-version-3.3.6-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.6-1.osg33.el7)
+
+### RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+    condor condor-all condor-bosco condor-classads condor-classads-devel condor-cream-gahp condor-debuginfo condor-kbdd condor-procd condor-python condor-std-universe condor-test condor-vm-gahp gip igtf-ca-certs osg-ca-certs osg-configure osg-configure-ce osg-configure-cemon osg-configure-condor osg-configure-gateway osg-configure-gip osg-configure-gratia osg-configure-infoservices osg-configure-lsf osg-configure-managedfork osg-configure-misc osg-configure-monalisa osg-configure-network osg-configure-pbs osg-configure-rsv osg-configure-sge osg-configure-slurm osg-configure-squid osg-configure-tests osg-info-services osg-test osg-version voms-admin-server
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+condor-8.4.2-1.2.osg33.el6
+condor-all-8.4.2-1.2.osg33.el6
+condor-bosco-8.4.2-1.2.osg33.el6
+condor-classads-8.4.2-1.2.osg33.el6
+condor-classads-devel-8.4.2-1.2.osg33.el6
+condor-cream-gahp-8.4.2-1.2.osg33.el6
+condor-debuginfo-8.4.2-1.2.osg33.el6
+condor-kbdd-8.4.2-1.2.osg33.el6
+condor-procd-8.4.2-1.2.osg33.el6
+condor-python-8.4.2-1.2.osg33.el6
+condor-std-universe-8.4.2-1.2.osg33.el6
+condor-test-8.4.2-1.2.osg33.el6
+condor-vm-gahp-8.4.2-1.2.osg33.el6
+gip-1.3.11-8.osg33.el6
+igtf-ca-certs-1.70-1.osg33.el6
+osg-ca-certs-1.51-1.osg33.el6
+osg-configure-1.2.5-1.osg33.el6
+osg-configure-ce-1.2.5-1.osg33.el6
+osg-configure-cemon-1.2.5-1.osg33.el6
+osg-configure-condor-1.2.5-1.osg33.el6
+osg-configure-gateway-1.2.5-1.osg33.el6
+osg-configure-gip-1.2.5-1.osg33.el6
+osg-configure-gratia-1.2.5-1.osg33.el6
+osg-configure-infoservices-1.2.5-1.osg33.el6
+osg-configure-lsf-1.2.5-1.osg33.el6
+osg-configure-managedfork-1.2.5-1.osg33.el6
+osg-configure-misc-1.2.5-1.osg33.el6
+osg-configure-monalisa-1.2.5-1.osg33.el6
+osg-configure-network-1.2.5-1.osg33.el6
+osg-configure-pbs-1.2.5-1.osg33.el6
+osg-configure-rsv-1.2.5-1.osg33.el6
+osg-configure-sge-1.2.5-1.osg33.el6
+osg-configure-slurm-1.2.5-1.osg33.el6
+osg-configure-squid-1.2.5-1.osg33.el6
+osg-configure-tests-1.2.5-1.osg33.el6
+osg-info-services-1.1.0-1.osg33.el6
+osg-test-1.4.32-1.osg33.el6
+osg-version-3.3.6-1.osg33.el6
+voms-admin-server-2.7.0-1.17.osg33.el6
+```
+
+#### Enterprise Linux 7
+
+``` file
+condor-8.4.2-1.2.osg33.el7
+condor-all-8.4.2-1.2.osg33.el7
+condor-bosco-8.4.2-1.2.osg33.el7
+condor-classads-8.4.2-1.2.osg33.el7
+condor-classads-devel-8.4.2-1.2.osg33.el7
+condor-debuginfo-8.4.2-1.2.osg33.el7
+condor-kbdd-8.4.2-1.2.osg33.el7
+condor-procd-8.4.2-1.2.osg33.el7
+condor-python-8.4.2-1.2.osg33.el7
+condor-test-8.4.2-1.2.osg33.el7
+condor-vm-gahp-8.4.2-1.2.osg33.el7
+gip-1.3.11-8.osg33.el7
+igtf-ca-certs-1.70-1.osg33.el7
+osg-ca-certs-1.51-1.osg33.el7
+osg-configure-1.2.5-1.osg33.el7
+osg-configure-ce-1.2.5-1.osg33.el7
+osg-configure-cemon-1.2.5-1.osg33.el7
+osg-configure-condor-1.2.5-1.osg33.el7
+osg-configure-gateway-1.2.5-1.osg33.el7
+osg-configure-gip-1.2.5-1.osg33.el7
+osg-configure-gratia-1.2.5-1.osg33.el7
+osg-configure-infoservices-1.2.5-1.osg33.el7
+osg-configure-lsf-1.2.5-1.osg33.el7
+osg-configure-managedfork-1.2.5-1.osg33.el7
+osg-configure-misc-1.2.5-1.osg33.el7
+osg-configure-monalisa-1.2.5-1.osg33.el7
+osg-configure-network-1.2.5-1.osg33.el7
+osg-configure-pbs-1.2.5-1.osg33.el7
+osg-configure-rsv-1.2.5-1.osg33.el7
+osg-configure-sge-1.2.5-1.osg33.el7
+osg-configure-slurm-1.2.5-1.osg33.el7
+osg-configure-squid-1.2.5-1.osg33.el7
+osg-configure-tests-1.2.5-1.osg33.el7
+osg-info-services-1.1.0-1.osg33.el7
+osg-test-1.4.32-1.osg33.el7
+osg-version-3.3.6-1.osg33.el7
+```
+
+### Upcoming Packages
+
+We added or updated the following packages to the **upcoming** OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+#### Enterprise Linux 7
+
+### Upcoming RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+```
+
+#### Enterprise Linux 7
+
+``` file
+```
+
+OSG Software Release 3.3.7
+==========================
+
+**Release Date**: 2015-12-15
+
+Summary of changes
+------------------
+
+This release contains:
+
+-   Fixed a problem in the PKI command line tools where "Certificate Requests" were being rejected by the CILogon Certificate Authority.
+
+These [JIRA tickets](https://jira.opensciencegrid.org/issues/?jql=project%20%3D%20SOFTWARE%20AND%20fixVersion%20%3D%203.3.7%20ORDER%20BY%20priority%20DESC) were addressed in this release.
+
+Detailed changes are below. All of the documentation can be found in the [Release3](https://twiki.grid.iu.edu/bin/view/Documentation/Release3/) area of the TWiki.
+
+Known Issues
+------------
+
+-   HTCondor 8.4.0 has changed it's behavior in ways that cause the GlideinWMS frontend configuration to break. In order to correct this, the following setting needs to be added to the configuration file:
+
+        :::file
+        COLLECTOR_USES_SHARED_PORT = False
+
+-   StashCache packages need to be manually configured
+    -   Manual configuration for origin server
+        -   Assuming that the origin server connects only to a redirector (not directly to cache server), minimal xrootd configuration is required. The configuration file, /etc/xrootd/xrootd-stashcache-origin-server.cfg, in this release is overkill. Here are recommended settings to use:
+
+                :::file
+                xrd.port 1094
+                all.role server
+                all.manager stash-redirector.example.com 1213
+                all.export / nostage
+                xrootd.trace emsg login stall redirect
+                ofs.trace none
+                xrd.trace conn
+                cms.trace all
+                sec.protocol  host
+                sec.protbind  * none
+                all.adminpath /var/run/xrootd
+                all.pidpath /var/run/xrootd
+
+-   Manual configuration for cache server
+    -   In contrast to the origin server configuration, one needs to declare `pss.origin <stash-redirector.example.com>` instead of configuring the cmsd or manager (only the xrootd daemon is required on the cache server). More detailed configuration of cache server for StashCache is [here](https://confluence.grid.iu.edu/pages/viewpage.action?title=Installing+an+XRootD+server+for+Stash+Cache&spaceKey=STAS).
+-   In both cases, administrator needs to set the path of custom configuration file for its xrootd/cmds instance in /etc/sysconfig/xrootd, For example, change the cmds default from:
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-clustered.cfg -k fifo"
+<br/>
+
+    to
+
+        :::file
+        CMSD_DEFAULT_OPTIONS="-l /var/log/xrootd/cmsd.log -c /etc/xrootd/xrootd-stashcache-origin-server.marian -k fifo" 
+
+Updating to the new release
+---------------------------
+
+### Update Repositories
+
+To update to this series, you need [install the current OSG repositories](../../common/yum#install-osg-repositories).
+
+### Update Software
+
+Once the new repositories are installed, you can update to this new release with:
+
+``` console
+[root@client ~] $ yum update
+```
+
+<span class="twiki-macro NOTE"></span> Please be aware that running `yum update` may also update other RPMs. You can exclude packages from being updated using the `--exclude=[package-name or glob]` option for the `yum` command.
+
+<span class="twiki-macro NOTE"></span> Watch the yum update carefully for any messages about a `.rpmnew` file being created. That means that a configuration file had been editted, and a new default version was to be installed. In that case, RPM does not overwrite the editted configuration file but instead installs the new version with a `.rpmnew` extension. You will need to merge any edits that have made into the `.rpmnew` file and then move the merged version into place (that is, without the `.rpmnew` extension). Watch especially for `/etc/lcmaps.db`, which every site is expected to edit.
+
+Need help?
+----------
+
+Do you need help with this release? [Contact us for help](../../common/help).
+
+Detailed changes in this release
+--------------------------------
+
+### Packages
+
+We added or updated the following packages to the production OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+-   [osg-pki-tools-1.2.13-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-pki-tools-1.2.13-1.osg33.el6)
+-   [osg-version-3.3.7-1.osg33.el6](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.7-1.osg33.el6)
+
+#### Enterprise Linux 7
+
+-   [osg-pki-tools-1.2.13-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-pki-tools-1.2.13-1.osg33.el7)
+-   [osg-version-3.3.7-1.osg33.el7](https://koji-hub.batlab.org/koji/search?match=glob&type=build&terms=osg-version-3.3.7-1.osg33.el7)
+
+### RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+    osg-pki-tools osg-pki-tools-tests osg-version
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+osg-pki-tools-1.2.13-1.osg33.el6
+osg-pki-tools-tests-1.2.13-1.osg33.el6
+osg-version-3.3.7-1.osg33.el6
+```
+
+#### Enterprise Linux 7
+
+``` file
+osg-pki-tools-1.2.13-1.osg33.el7
+osg-pki-tools-tests-1.2.13-1.osg33.el7
+osg-version-3.3.7-1.osg33.el7
+```
+
+### Upcoming Packages
+
+We added or updated the following packages to the **upcoming** OSG yum repository. Note that in some cases, there are multiple RPMs for each package. You can click on any given package to see the set of RPMs or see the complete list below.
+
+#### Enterprise Linux 6
+
+#### Enterprise Linux 7
+
+### Upcoming RPMs
+
+If you wish to manually update your system, you can run yum update against the following packages:
+
+If you wish to only update the RPMs that changed, the set of RPMs is:
+
+#### Enterprise Linux 6
+
+``` file
+```
+
+#### Enterprise Linux 7
+
+``` file
+```
+
